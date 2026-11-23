@@ -1,13 +1,15 @@
 from rest_framework import serializers
 
 from .repository import CasoFilters
-from .services import GRANULARIDADES
+from .services import GRANULARIDADES, IDIOMAS_RESUMO
 
 
 class IdListField(serializers.Field):
     """Aceita IDs inteiros separados por vírgula: ?doenca=1,2,3"""
 
-    default_error_messages = {"invalid": "Use IDs inteiros separados por vírgula (ex.: 1,2,3)."}
+    default_error_messages = {
+        "invalid": "Use IDs inteiros separados por vírgula (ex.: 1,2,3)."
+    }
 
     def to_internal_value(self, data):
         try:
@@ -30,7 +32,9 @@ class FiltroSerializer(serializers.Serializer):
     def validate(self, attrs):
         inicio, fim = attrs.get("data_inicio"), attrs.get("data_fim")
         if inicio and fim and inicio > fim:
-            raise serializers.ValidationError("data_inicio não pode ser posterior a data_fim.")
+            raise serializers.ValidationError(
+                "data_inicio não pode ser posterior a data_fim."
+            )
         return attrs
 
     def to_filters(self) -> CasoFilters:
@@ -46,4 +50,16 @@ class FiltroSerializer(serializers.Serializer):
 
 
 class CrescimentoSerializer(FiltroSerializer):
-    granularidade = serializers.ChoiceField(choices=GRANULARIDADES, required=False, default="mes")
+    granularidade = serializers.ChoiceField(
+        choices=GRANULARIDADES, required=False, default="mes"
+    )
+
+
+class FontesSerializer(FiltroSerializer):
+    idioma = serializers.ChoiceField(
+        choices=IDIOMAS_RESUMO, required=False, default="pt"
+    )
+    pagina = serializers.IntegerField(required=False, min_value=1, default=1)
+    limite = serializers.IntegerField(
+        required=False, min_value=1, max_value=200, default=50
+    )

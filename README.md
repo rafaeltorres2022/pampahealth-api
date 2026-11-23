@@ -55,6 +55,24 @@ Uma entrada por local, com totais e detalhamento por doença:
 }
 ```
 
+### `GET fontes/` e `GET doencas/<id>/fontes/` — fontes dos casos
+Lista as fontes (título, resumo gerado por IA e link original) que embasam os casos. Aceita os mesmos filtros acima; em `doencas/<id>/fontes/` o `id` da rota substitui `?doenca=`.
+Parâmetros extras: `idioma=pt|en|es` (idioma do resumo, padrão `pt`), `pagina` (padrão 1) e `limite` (padrão 50, máx. 200).
+Ordenadas da publicação mais recente para a mais antiga (sem data por último).
+```json
+{
+  "total": 42, "pagina": 1, "limite": 50,
+  "resultados": [
+    {"fonte_id": 7, "titulo": "Surto de raiva ...", "url": "https://...",
+     "resumo": "Resumo gerado por IA ...", "idioma_resumo": "pt",
+     "idioma_original": "Português", "data_publicacao": "2026-03-05",
+     "doencas": [{"doenca_id": 1, "doenca": "Raiva"}],
+     "locais": [{"pais": "Brasil", "cidade": "Santiago"}]}
+  ]
+}
+```
+`resumo` é `null` quando a fonte não tem resumo no idioma pedido. Com filtro de local, `doencas` e `locais` trazem só o que casa com o filtro.
+
 ### `GET estatisticas/doencas/` — totais por doença
 `{"total": {...}, "doencas": [{"doenca_id", "doenca", "ocorrencias", "mortes", ...}]}`
 
@@ -73,24 +91,6 @@ Padrão: últimos 30 dias. `granularidade=dia|semana|mes` (padrão `mes`) contro
 ```
 `variacao_percentual` é `null` quando não havia casos no período anterior (não existe base de comparação).
 
-## Decisões e premissas
-
-- **Ocorrências** = `quantidade_animal + quantidade_humano`; **mortes** = `obitos_animal + obitos_humano` (soma das colunas de `casos_identificados`; as versões separadas animal/humano também são retornadas).
-- A **data do caso** é `fontes.data_publicacao` (a tabela de casos não tem data própria).
-- A tabela `locais` só tem `pais` e `cidade`, **sem latitude/longitude**: o front-end precisa geocodificar para posicionar as bolhas (ou adicione colunas de coordenadas em `locais` e inclua-as em `repository.py`).
-- Nomes de tabelas assumidos em minúsculas, conforme o diagrama: `casos_identificados`, `zoonoses`, `locais`, `fontes`, `especies_hospedeiro`, `zoonose_hospedeiro`. Se forem diferentes no Supabase, ajuste as constantes `T_*` no topo de `api/repository.py`.
-- Sem models/ORM/auth do Django: a API só faz `SELECT` via cliente Supabase e agrega em Python.
-
-## Segurança: garanta o "somente leitura" no banco
-
-Use a chave **anon/publishable** (não a `service_role`, que ignora RLS) e crie políticas de leitura apenas:
-
-```sql
--- repita para: casos_identificados, zoonoses, locais, fontes, especies_hospedeiro, zoonose_hospedeiro
-alter table public.casos_identificados enable row level security;
-create policy "leitura" on public.casos_identificados for select to anon using (true);
-```
-Sem políticas de INSERT/UPDATE/DELETE, nenhuma escrita é possível mesmo que a chave vaze.
 
 ## Testes
 ```bash

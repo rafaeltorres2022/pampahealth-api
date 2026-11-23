@@ -1,15 +1,19 @@
+from dataclasses import replace
+
 from django.conf import settings
 from django.core.cache import cache
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from . import repository, services
-from .serializers import CrescimentoSerializer, FiltroSerializer
+from .serializers import CrescimentoSerializer, FiltroSerializer, FontesSerializer
 
 
 def _cached(key: str, loader):
     """Cache curto para as listas de filtros (mudam raramente)."""
-    return cache.get_or_set(f"{settings.APP_ENV}:{key}", loader, settings.LOOKUP_CACHE_SECONDS)
+    return cache.get_or_set(
+        f"{settings.APP_ENV}:{key}", loader, settings.LOOKUP_CACHE_SECONDS
+    )
 
 
 class ReadOnlyView(APIView):
@@ -49,7 +53,11 @@ class CidadeListView(ReadOnlyView):
     def get(self, request):
         pais = request.query_params.get("pais")
         locais = _cached("locais", repository.list_locais)
-        cidades = {l["cidade"] for l in locais if l["cidade"] and (not pais or l["pais"] == pais)}
+        cidades = {
+            l["cidade"]
+            for l in locais
+            if l["cidade"] and (not pais or l["pais"] == pais)
+        }
         return Response(sorted(cidades))
 
 
@@ -71,7 +79,9 @@ class MapaView(FilteredView):
     def get(self, request):
         filters = self.parse_params(request).to_filters()
         rows = repository.fetch_casos(filters)
-        return Response({"total": services.summarize(rows), "locais": services.map_bubbles(rows)})
+        return Response(
+            {"total": services.summarize(rows), "locais": services.map_bubbles(rows)}
+        )
 
 
 class EstatisticasDoencasView(FilteredView):
@@ -80,7 +90,9 @@ class EstatisticasDoencasView(FilteredView):
     def get(self, request):
         filters = self.parse_params(request).to_filters()
         rows = repository.fetch_casos(filters)
-        return Response({"total": services.summarize(rows), "doencas": services.by_disease(rows)})
+        return Response(
+            {"total": services.summarize(rows), "doencas": services.by_disease(rows)}
+        )
 
 
 class CrescimentoView(FilteredView):
@@ -106,5 +118,34 @@ class CrescimentoView(FilteredView):
             )
         )
         return Response(
-            services.growth_report(rows, inicio, fim, serializer.validated_data["granularidade"])
+            services.growth_report(
+                rows, inicio, fim, serializer.validated_data["granularidade"]
+            )
         )
+
+
+class FontesView(FilteredView):
+    """Fontes (título, resumo gerado por IA e link original) dos casos filtrados.
+
+    Parâmetros extras: idioma=pt|en|es (idioma do resumo), pagina, limite.
+    """
+
+    serializer_class = FontesSerializer
+
+    def build_filters(self, serializer, **path_kwargs):
+        return serializer.to_filters()
+
+    def get(self, request, **path_kwargs):
+        serializer = self.parse_params(request)
+        filters = self.build_filters(serializer, **path_kwargs)
+        data = serializer.validated_data
+        rows = repository.fetch_fontes(filters)
+        fontes = services.group_fontes(rows, data["idioma"])
+        return Response(services.paginate(fontes, data["pagina"], data["limite"]))
+
+
+class DoencaFontesView(FontesView):
+    """Fontes de uma zoonose específica: doencas/<id>/fontes/ (ignora ?doenca=)."""
+
+    def build_filters(self, serializer, doenca_id):
+        return replace(serializer.to_filters(), doencas=(doenca_id,))

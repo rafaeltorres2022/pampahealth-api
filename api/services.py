@@ -1,4 +1,5 @@
 """Cálculos sobre os casos (funções puras, sem Django nem rede)."""
+
 from __future__ import annotations
 
 from datetime import date, timedelta
@@ -60,7 +61,9 @@ def map_bubbles(rows: list[dict]) -> list[dict]:
             {"pais": r["pais"], "cidade": r["cidade"], "acc": _zero(), "doencas": {}},
         )
         _add(loc["acc"], r)
-        d = loc["doencas"].setdefault(r["doenca_id"], {"nome": r["doenca"], "acc": _zero()})
+        d = loc["doencas"].setdefault(
+            r["doenca_id"], {"nome": r["doenca"], "acc": _zero()}
+        )
         _add(d["acc"], r)
 
     result = []
@@ -81,14 +84,19 @@ def map_bubbles(rows: list[dict]) -> list[dict]:
                 "doencas": doencas,
             }
         )
-    return sorted(result, key=lambda x: (-x["ocorrencias"], x["pais"] or "", x["cidade"] or ""))
+    return sorted(
+        result, key=lambda x: (-x["ocorrencias"], x["pais"] or "", x["cidade"] or "")
+    )
 
 
 # --------------------------------------------------------------------------
 # Crescimento em um período
 # --------------------------------------------------------------------------
 def resolve_period(
-    inicio: date | None, fim: date | None, hoje: date | None = None, default_days: int = 30
+    inicio: date | None,
+    fim: date | None,
+    hoje: date | None = None,
+    default_days: int = 30,
 ) -> tuple[date, date]:
     """Preenche o que faltar: fim = hoje; início = fim - (default_days - 1)."""
     fim = fim or hoje or date.today()
@@ -133,7 +141,9 @@ def _next_bucket(d: date, granularidade: str) -> date:
     return (d.replace(day=1) + timedelta(days=32)).replace(day=1)
 
 
-def time_series(rows: list[dict], inicio: date, fim: date, granularidade: str) -> list[dict]:
+def time_series(
+    rows: list[dict], inicio: date, fim: date, granularidade: str
+) -> list[dict]:
     """Série temporal do período, com os intervalos sem casos preenchidos com zero."""
     buckets: dict[date, dict] = {}
     cursor = _bucket_start(inicio, granularidade)
@@ -175,7 +185,9 @@ def growth_report(
             {
                 "doenca_id": did,
                 "doenca": nomes.get(did),
-                "ocorrencias": variation(c.get("ocorrencias", 0), p.get("ocorrencias", 0)),
+                "ocorrencias": variation(
+                    c.get("ocorrencias", 0), p.get("ocorrencias", 0)
+                ),
                 "mortes": variation(c.get("mortes", 0), p.get("mortes", 0)),
             }
         )
@@ -183,8 +195,15 @@ def growth_report(
 
     tot_c, tot_p = summarize(atual), summarize(anterior)
     return {
-        "periodo": {"inicio": inicio.isoformat(), "fim": fim.isoformat(), "dias": (fim - inicio).days + 1},
-        "periodo_anterior": {"inicio": ant_inicio.isoformat(), "fim": ant_fim.isoformat()},
+        "periodo": {
+            "inicio": inicio.isoformat(),
+            "fim": fim.isoformat(),
+            "dias": (fim - inicio).days + 1,
+        },
+        "periodo_anterior": {
+            "inicio": ant_inicio.isoformat(),
+            "fim": ant_fim.isoformat(),
+        },
         "total": {
             "ocorrencias": variation(tot_c["ocorrencias"], tot_p["ocorrencias"]),
             "mortes": variation(tot_c["mortes"], tot_p["mortes"]),
@@ -192,4 +211,66 @@ def growth_report(
         "doencas": doencas,
         "granularidade": granularidade,
         "serie_temporal": time_series(atual, inicio, fim, granularidade),
+    }
+
+
+# --------------------------------------------------------------------------
+# Fontes (artigos/notícias) que embasam os casos
+# --------------------------------------------------------------------------
+IDIOMAS_RESUMO = ("pt", "en", "es")
+
+
+def group_fontes(rows: list[dict], idioma: str = "pt") -> list[dict]:
+    """Agrupa as linhas por fonte, reunindo as doenças e os locais citados em cada uma.
+
+    Ordem: publicação mais recente primeiro (sem data por último).
+    """
+    fontes: dict[int, dict] = {}
+    for r in rows:
+        f = fontes.setdefault(
+            r["fonte_id"],
+            {
+                "fonte_id": r["fonte_id"],
+                "titulo": r["titulo"],
+                "url": r["url"],
+                "resumo": r.get(f"resumo_{idioma}"),
+                "idioma_resumo": idioma,
+                "idioma_original": r["idioma_original"],
+                "data_publicacao": r["data"].isoformat() if r["data"] else None,
+                "doencas": {},
+                "locais": {},
+            },
+        )
+        f["doencas"][r["doenca_id"]] = r["doenca"]
+        f["locais"][(r["pais"], r["cidade"])] = None
+
+    result = [
+        {
+            **{k: v for k, v in f.items() if k not in ("doencas", "locais")},
+            "doencas": [
+                {"doenca_id": i, "doenca": n}
+                for i, n in sorted(f["doencas"].items(), key=lambda x: x[1] or "")
+            ],
+            "locais": [
+                {"pais": p, "cidade": c}
+                for p, c in sorted(f["locais"], key=lambda x: (x[0] or "", x[1] or ""))
+            ],
+        }
+        for f in fontes.values()
+    ]
+    # data desc (None por último), depois id desc
+    result.sort(key=lambda f: f["fonte_id"], reverse=True)
+    result.sort(key=lambda f: f["data_publicacao"] or "", reverse=True)
+    com_data = [f for f in result if f["data_publicacao"]]
+    sem_data = [f for f in result if not f["data_publicacao"]]
+    return com_data + sem_data
+
+
+def paginate(items: list, pagina: int, limite: int) -> dict:
+    inicio = (pagina - 1) * limite
+    return {
+        "total": len(items),
+        "pagina": pagina,
+        "limite": limite,
+        "resultados": items[inicio : inicio + limite],
     }

@@ -7,6 +7,7 @@ O ambiente é escolhido pela variável APP_ENV (development | production) no .en
 A API não usa o banco do Django (sem models, sem auth, sem sessões): todos os
 dados são lidos do Supabase em modo somente leitura.
 """
+
 import os
 from pathlib import Path
 
@@ -25,7 +26,9 @@ def _env_bool(name: str, default: bool) -> bool:
 
 
 def _env_list(name: str, default: str = "") -> list[str]:
-    return [item.strip() for item in os.getenv(name, default).split(",") if item.strip()]
+    return [
+        item.strip() for item in os.getenv(name, default).split(",") if item.strip()
+    ]
 
 
 # --------------------------------------------------------------------------
@@ -64,11 +67,24 @@ if not SECRET_KEY:
 DEBUG = _env_bool("DJANGO_DEBUG", default=not IS_PRODUCTION)
 ALLOWED_HOSTS = _env_list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1")
 
-INSTALLED_APPS = [
-    "corsheaders",
-    "rest_framework",
-    "api",
+INSTALLED_APPS = ["corsheaders", "rest_framework", "api", "drf_spectacular"]
+
+TEMPLATES = [
+    {
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [],
+        "APP_DIRS": True,
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.debug",
+                "django.template.context_processors.request",
+                "django.contrib.auth.context_processors.auth",
+                "django.contrib.messages.context_processors.messages",
+            ],
+        },
+    },
 ]
+
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
@@ -112,6 +128,7 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_CLASSES": ["rest_framework.throttling.AnonRateThrottle"],
     "DEFAULT_THROTTLE_RATES": {"anon": os.getenv("THROTTLE_RATE", "120/min")},
     "EXCEPTION_HANDLER": "api.exceptions.handler",
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }
 
 LOGGING = {

@@ -4,13 +4,29 @@ from datetime import date
 from api import services
 
 
-def caso(doenca_id=1, doenca="Raiva", local_id=1, pais="Brasil", cidade="Santiago",
-         data=date(2026, 3, 10), oa=0, oh=0, ma=0, mh=0):
+def caso(
+    doenca_id=1,
+    doenca="Raiva",
+    local_id=1,
+    pais="Brasil",
+    cidade="Santiago",
+    data=date(2026, 3, 10),
+    oa=0,
+    oh=0,
+    ma=0,
+    mh=0,
+):
     return {
-        "doenca_id": doenca_id, "doenca": doenca, "local_id": local_id,
-        "pais": pais, "cidade": cidade, "data": data,
-        "ocorrencias_animal": oa, "ocorrencias_humano": oh,
-        "mortes_animal": ma, "mortes_humano": mh,
+        "doenca_id": doenca_id,
+        "doenca": doenca,
+        "local_id": local_id,
+        "pais": pais,
+        "cidade": cidade,
+        "data": data,
+        "ocorrencias_animal": oa,
+        "ocorrencias_humano": oh,
+        "mortes_animal": ma,
+        "mortes_humano": mh,
     }
 
 
@@ -47,7 +63,9 @@ class AgrupamentoTests(unittest.TestCase):
         self.assertEqual(santiago["cidade"], "Santiago")
         self.assertEqual(santiago["ocorrencias"], 15)
         self.assertEqual(santiago["mortes"], 5)
-        self.assertEqual({d["doenca"] for d in santiago["doencas"]}, {"Raiva", "Leptospirose"})
+        self.assertEqual(
+            {d["doenca"] for d in santiago["doencas"]}, {"Raiva", "Leptospirose"}
+        )
 
 
 class PeriodoTests(unittest.TestCase):
@@ -84,12 +102,12 @@ class CrescimentoTests(unittest.TestCase):
     def setUp(self):
         self.inicio, self.fim = date(2026, 3, 1), date(2026, 3, 31)  # 31 dias
         self.rows = [
-            caso(1, "Raiva", data=date(2026, 3, 5), oa=15, ma=3),      # atual
-            caso(1, "Raiva", data=date(2026, 2, 10), oa=10, ma=2),     # anterior
-            caso(2, "Leptospirose", data=date(2026, 3, 20), oh=4),     # só atual
-            caso(3, "Brucelose", data=date(2026, 2, 12), oh=6),        # só anterior
-            caso(1, "Raiva", data=date(2025, 6, 1), oa=99),            # fora das janelas
-            caso(1, "Raiva", data=None, oa=99),                        # sem data
+            caso(1, "Raiva", data=date(2026, 3, 5), oa=15, ma=3),  # atual
+            caso(1, "Raiva", data=date(2026, 2, 10), oa=10, ma=2),  # anterior
+            caso(2, "Leptospirose", data=date(2026, 3, 20), oh=4),  # só atual
+            caso(3, "Brucelose", data=date(2026, 2, 12), oh=6),  # só anterior
+            caso(1, "Raiva", data=date(2025, 6, 1), oa=99),  # fora das janelas
+            caso(1, "Raiva", data=None, oa=99),  # sem data
         ]
 
     def test_totais(self):
@@ -117,8 +135,12 @@ class CrescimentoTests(unittest.TestCase):
         )
 
     def test_serie_semanal_comeca_na_segunda(self):
-        s = services.time_series([], date(2026, 3, 4), date(2026, 3, 18), "semana")  # 4/mar = quarta
-        self.assertEqual([p["inicio"] for p in s], ["2026-03-02", "2026-03-09", "2026-03-16"])
+        s = services.time_series(
+            [], date(2026, 3, 4), date(2026, 3, 18), "semana"
+        )  # 4/mar = quarta
+        self.assertEqual(
+            [p["inicio"] for p in s], ["2026-03-02", "2026-03-09", "2026-03-16"]
+        )
 
     def test_serie_diaria(self):
         s = services.time_series([], date(2026, 3, 1), date(2026, 3, 3), "dia")
@@ -126,7 +148,78 @@ class CrescimentoTests(unittest.TestCase):
 
     def test_virada_de_ano_mensal(self):
         s = services.time_series([], date(2025, 11, 20), date(2026, 1, 5), "mes")
-        self.assertEqual([p["inicio"] for p in s], ["2025-11-01", "2025-12-01", "2026-01-01"])
+        self.assertEqual(
+            [p["inicio"] for p in s], ["2025-11-01", "2025-12-01", "2026-01-01"]
+        )
+
+
+def linha_fonte(
+    fonte_id=1,
+    titulo="Surto de raiva",
+    doenca_id=1,
+    doenca="Raiva",
+    pais="Brasil",
+    cidade="Santiago",
+    data=date(2026, 3, 5),
+):
+    return {
+        "fonte_id": fonte_id,
+        "titulo": titulo,
+        "url": f"https://ex.com/{fonte_id}",
+        "resumo_pt": "resumo pt",
+        "resumo_en": "english summary",
+        "resumo_es": None,
+        "idioma_original": "Português",
+        "data": data,
+        "doenca_id": doenca_id,
+        "doenca": doenca,
+        "pais": pais,
+        "cidade": cidade,
+    }
+
+
+class FontesTests(unittest.TestCase):
+    def test_agrupa_doencas_e_locais_por_fonte(self):
+        rows = [
+            linha_fonte(1, doenca_id=1, doenca="Raiva", cidade="Santiago"),
+            linha_fonte(1, doenca_id=2, doenca="Leptospirose", cidade="Alegrete"),
+            linha_fonte(1, doenca_id=1, doenca="Raiva", cidade="Santiago"),  # duplicada
+        ]
+        r = services.group_fontes(rows)
+        self.assertEqual(len(r), 1)
+        self.assertEqual(
+            [d["doenca"] for d in r[0]["doencas"]], ["Leptospirose", "Raiva"]
+        )
+        self.assertEqual(
+            [l["cidade"] for l in r[0]["locais"]], ["Alegrete", "Santiago"]
+        )
+        self.assertEqual(r[0]["url"], "https://ex.com/1")
+
+    def test_resumo_no_idioma_pedido(self):
+        rows = [linha_fonte()]
+        self.assertEqual(services.group_fontes(rows, "pt")[0]["resumo"], "resumo pt")
+        self.assertEqual(
+            services.group_fontes(rows, "en")[0]["resumo"], "english summary"
+        )
+        self.assertIsNone(services.group_fontes(rows, "es")[0]["resumo"])
+
+    def test_ordem_mais_recente_primeiro_e_sem_data_por_ultimo(self):
+        rows = [
+            linha_fonte(1, data=date(2026, 1, 1)),
+            linha_fonte(2, data=None),
+            linha_fonte(3, data=date(2026, 5, 1)),
+        ]
+        self.assertEqual(
+            [f["fonte_id"] for f in services.group_fontes(rows)], [3, 1, 2]
+        )
+
+    def test_paginacao(self):
+        itens = list(range(5))
+        p = services.paginate(itens, pagina=2, limite=2)
+        self.assertEqual(
+            p, {"total": 5, "pagina": 2, "limite": 2, "resultados": [2, 3]}
+        )
+        self.assertEqual(services.paginate(itens, 9, 2)["resultados"], [])
 
 
 if __name__ == "__main__":
