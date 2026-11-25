@@ -13,6 +13,10 @@ from pathlib import Path
 
 from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
+import logging
+
+for nome in ("hpack", "httpcore", "httpx"):
+    logging.getLogger(nome).setLevel(logging.WARNING)
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
@@ -112,7 +116,9 @@ LOOKUP_CACHE_SECONDS = 300
 # --------------------------------------------------------------------------
 # CORS (apenas leitura)
 # --------------------------------------------------------------------------
-CORS_ALLOWED_ORIGINS = _env_list("CORS_ALLOWED_ORIGINS")
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5000",
+]
 CORS_ALLOW_ALL_ORIGINS = (not IS_PRODUCTION) and not CORS_ALLOWED_ORIGINS
 CORS_ALLOW_METHODS = ["GET", "HEAD", "OPTIONS"]
 

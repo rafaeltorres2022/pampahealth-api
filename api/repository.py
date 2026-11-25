@@ -9,9 +9,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 from typing import Callable
+import threading
 
 from .supabase_client import get_client
 
+_SUPABASE_LOCK = threading.Lock()
 T_CASOS = "casos_identificados"
 T_ZOONOSES = "zoonoses"
 T_HOSPEDEIROS = "especies_hospedeiro"
@@ -37,7 +39,8 @@ def _fetch_all(build_query: Callable) -> list[dict]:
     rows: list[dict] = []
     offset = 0
     while True:
-        batch = build_query().range(offset, offset + PAGE_SIZE - 1).execute().data or []
+        with _SUPABASE_LOCK:
+            batch = build_query().range(offset, offset + PAGE_SIZE - 1).execute().data or []
         rows.extend(batch)
         if len(batch) < PAGE_SIZE:
             return rows
